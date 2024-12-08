@@ -32,7 +32,7 @@ pip install -r requirements.txt --break-system-packages
 ### Usage
 Follow the instructions to use the `network-traffic-class`.
 
-```
+```bash
 python3 process_dataset.py
 python3 train_model.py
 python3 test.py
