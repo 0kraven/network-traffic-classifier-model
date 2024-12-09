@@ -69,9 +69,11 @@ if 'bad_packet' in new_df.columns:
 else:
     # Filter and print only the bad packets (assuming '1' indicates bad packets)
     bad_packets = new_df[new_df['Predicted_bad_packet'] == 1]
-    
+    normal_packates = new_df[new_df['Predicted_bad_packet'] == 0]
     # Print the filtered bad packets in a readable format
-    print("Filtered Bad Packets:")
+    print("Filtered Bad Packets:\n")
     print(bad_packets[['Time', 'Protocol', 'Length', 'Source', 'Destination', 'Predicted_bad_packet']])
-    
+    print("\nNormal Packates:\n")
+    print(normal_packates[['Time', 'Protocol', 'Length', 'Source', 'Destination', 'Predicted_bad_packet']])
+new_df.to_csv("new_traffic_predictions.csv")
 
