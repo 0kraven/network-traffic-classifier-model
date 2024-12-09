@@ -27,8 +27,9 @@ def safe_transform(encoder, column):
     return transformed_column
 
 # Print the first few rows before applying transformations
+print("\n\nBefore filtering packates:\n")
 print(new_df_cleaned[['Time', 'Protocol', 'Length', 'Source', 'Destination']].head())
-
+print("\n\n")
 # Apply encoding and check the result
 new_df_cleaned.loc[:, 'Protocol'] = safe_transform(le_protocol, new_df_cleaned['Protocol'])
 new_df_cleaned.loc[:, 'Source'] = safe_transform(le_source, new_df_cleaned['Source'])
@@ -46,8 +47,7 @@ y_pred_new = clf.predict(X_new)
 # Add predictions to the DataFrame
 new_df['Predicted_bad_packet'] = y_pred_new
 
-# Save the entire DataFrame with predictions to a new CSV file
-new_df.to_csv('predictions.csv', index=False)
+
 
 # If the true labels are available in the new data (i.e., 'bad_packet' column exists in the new dataset)
 if 'bad_packet' in new_df.columns:
@@ -74,8 +74,4 @@ else:
     print("Filtered Bad Packets:")
     print(bad_packets[['Time', 'Protocol', 'Length', 'Source', 'Destination', 'Predicted_bad_packet']])
     
-    # Save the bad packets to a CSV file
-    bad_packets.to_csv('bad_packets.csv', index=False)
 
-    # Optionally, print the output (comment this out if unnecessary)
-    print(f"Bad packets saved to 'bad_packets.csv'.")
