@@ -3,7 +3,8 @@ import joblib
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
 
 # Load the new dataset (for testing)
-new_df = pd.read_csv('unlabeled_training_data.csv')
+network_traffic = input("Enter the name of file: ")
+new_df = pd.read_csv(network_traffic)
 
 # Clean the new data: Keep only the relevant columns for prediction
 new_df_cleaned = new_df[['Time', 'Protocol', 'Length', 'Source', 'Destination']]
@@ -25,10 +26,13 @@ def safe_transform(encoder, column):
             transformed_column.append(-1)  # You could use a specific value if needed
     return transformed_column
 
-# Apply label encoding to the relevant columns with safe transformation
-new_df_cleaned['Protocol'] = safe_transform(le_protocol, new_df_cleaned['Protocol'])
-new_df_cleaned['Source'] = safe_transform(le_source, new_df_cleaned['Source'])
-new_df_cleaned['Destination'] = safe_transform(le_destination, new_df_cleaned['Destination'])
+# Print the first few rows before applying transformations
+print(new_df_cleaned[['Time', 'Protocol', 'Length', 'Source', 'Destination']].head())
+
+# Apply encoding and check the result
+new_df_cleaned.loc[:, 'Protocol'] = safe_transform(le_protocol, new_df_cleaned['Protocol'])
+new_df_cleaned.loc[:, 'Source'] = safe_transform(le_source, new_df_cleaned['Source'])
+new_df_cleaned.loc[:, 'Destination'] = safe_transform(le_destination, new_df_cleaned['Destination'])
 
 # Load the trained Random Forest model
 clf = joblib.load('traffic_classifier_model.pkl')
@@ -38,6 +42,12 @@ X_new = new_df_cleaned[['Time', 'Protocol', 'Length', 'Source', 'Destination']]
 
 # Make predictions on the new data
 y_pred_new = clf.predict(X_new)
+
+# Add predictions to the DataFrame
+new_df['Predicted_bad_packet'] = y_pred_new
+
+# Save the entire DataFrame with predictions to a new CSV file
+new_df.to_csv('predictions.csv', index=False)
 
 # If the true labels are available in the new data (i.e., 'bad_packet' column exists in the new dataset)
 if 'bad_packet' in new_df.columns:
@@ -57,7 +67,15 @@ if 'bad_packet' in new_df.columns:
     disp.plot(cmap='Blues')
 
 else:
-    # If no 'bad_packet' column is available in the new data, just output the predictions
-    new_df['Predicted_bad_packet'] = y_pred_new
-    print(new_df[['Time', 'Protocol', 'Length', 'Source', 'Destination', 'Predicted_bad_packet']])
+    # Filter and print only the bad packets (assuming '1' indicates bad packets)
+    bad_packets = new_df[new_df['Predicted_bad_packet'] == 1]
+    
+    # Print the filtered bad packets in a readable format
+    print("Filtered Bad Packets:")
+    print(bad_packets[['Time', 'Protocol', 'Length', 'Source', 'Destination', 'Predicted_bad_packet']])
+    
+    # Save the bad packets to a CSV file
+    bad_packets.to_csv('bad_packets.csv', index=False)
 
+    # Optionally, print the output (comment this out if unnecessary)
+    print(f"Bad packets saved to 'bad_packets.csv'.")
