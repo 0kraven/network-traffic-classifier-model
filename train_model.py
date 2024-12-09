@@ -1,116 +1,134 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
-from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
 import joblib
-import matplotlib.pyplot as plt
+from collections import defaultdict  # Import defaultdict
 import seaborn as sns
-import warnings
-
-# Suppress all warnings (if you really need to)
-warnings.filterwarnings('ignore')
-
+import matplotlib.pyplot as plt
 # Load the dataset
 df = pd.read_csv('training_data.csv')
 
-# Clean the dataset: Keep only relevant columns for classification
-df_cleaned = df[['Time', 'Protocol', 'Length', 'Source', 'Destination', 'bad_packet']]
+# Check column names to ensure 'Info' exists
+# print("Columns in dataset:", df.columns)
 
-# Feature Engineering: Label encoding for categorical variables
-print("Starting label encoding for categorical columns...")
+# Filter out only ARP packets
+df_arp = df[df['Protocol'] == 'ARP']
 
-# Label encoding for 'Protocol' (fit on the entire training data)
-le_protocol = LabelEncoder()
-le_protocol.fit(df_cleaned['Protocol'])  # Fit on all possible labels in training data
-df_cleaned['Protocol'] = le_protocol.transform(df_cleaned['Protocol'])
-print("Label encoding for 'Protocol' completed.")
+# Initialize a new column 'bad_packet' with 0 (normal)
+df_arp.loc[:, 'bad_packet'] = 0
 
-# Label encoding for 'Source' (fit on the entire training data)
-le_source = LabelEncoder()
-le_source.fit(df_cleaned['Source'])  # Fit on all possible labels in training data
-df_cleaned['Source'] = le_source.transform(df_cleaned['Source'])
-print("Label encoding for 'Source' completed.")
+# Extract features (Timestamp, Packet Length, Number of MAC addresses per IP)
+ip_mac_map = defaultdict(set)
+feature_list = []
 
-# Label encoding for 'Destination' (fit on the entire training data)
-le_destination = LabelEncoder()
-le_destination.fit(df_cleaned['Destination'])  # Fit on all possible labels in training data
-df_cleaned['Destination'] = le_destination.transform(df_cleaned['Destination'])
-print("Label encoding for 'Destination' completed.")
+for index, row in df_arp.iterrows():
+    ip_address = row['Info'].split(' ')[0]  # '192.168.1.1'
+    mac_address = row['Source']  # MAC address of the source device
+    ip_mac_map[ip_address].add(mac_address)
+    
+    # Feature extraction
+    num_mac_addresses = len(ip_mac_map[ip_address])
+    feature_list.append([row['Time'], row['Length'], num_mac_addresses])
 
-# Feature matrix (X) and target vector (y)
-X = df_cleaned[['Time', 'Protocol', 'Length', 'Source', 'Destination']]  # Features
-y = df_cleaned['bad_packet']  # Target (malicious = 1, normal = 0)
+# Convert features to a DataFrame
+features_df = pd.DataFrame(feature_list, columns=['Time', 'Length', 'Num_MAC_Addresses'])
+df_arp = pd.concat([df_arp, features_df], axis=1)
 
-# Split the data into training and testing sets (70% train, 30% test)
-print("Splitting the data into training and testing sets...")
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-print("Data splitting completed.")
+# Drop rows with NaN values in 'bad_packet' (target variable)
+df_arp = df_arp.dropna(subset=['bad_packet'])
 
-# Train the Random Forest Classifier
-print("Training the Random Forest Classifier...")
+# Prepare the feature matrix X and target variable y
+X_train = df_arp[['Time', 'Length', 'Num_MAC_Addresses']]  # Features
+y_train = df_arp['bad_packet']  # Target
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+
+# Initialize RandomForest model
 clf = RandomForestClassifier(n_estimators=100, random_state=42)
+
+# Fit the model
 clf.fit(X_train, y_train)
-print("Model training completed.")
-
-# Predictions on test data
-y_pred = clf.predict(X_test)
-
-# Evaluate the model
-print("Evaluating the model...")
-
-accuracy = accuracy_score(y_test, y_pred)
-print(f"Accuracy: {accuracy:.4f}\n")
-
-print("Classification Report:")
-print(classification_report(y_test, y_pred))
-
-# Confusion Matrix
-cm = confusion_matrix(y_test, y_pred)
-print("Confusion Matrix:")
-disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Normal', 'Malicious'])
-disp.plot(cmap='Blues')
-plt.title('Confusion Matrix')
-plt.show()
-
-# Feature Importance Plot
-importances = clf.feature_importances_
-features = ['Time', 'Protocol', 'Length', 'Source', 'Destination']
-feature_importance = pd.Series(importances, index=features).sort_values(ascending=False)
-
-plt.figure(figsize=(8, 6))
-feature_importance.plot(kind='bar', color='lightblue')
-plt.title('Feature Importance')
-plt.xlabel('Feature')
-plt.ylabel('Importance')
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
-
-# Plot the distribution of 'bad_packet' values
-plt.figure(figsize=(6, 4))
-sns.countplot(x='bad_packet', data=df_cleaned, palette='viridis', hue='bad_packet', legend=False)
-plt.title('Distribution of Classes (bad_packet)')
-plt.xlabel('bad_packet (Normal = 0, Malicious = 1)')
-plt.ylabel('Count')
-plt.tight_layout()
-plt.show()
 
 # Save the trained model
-print("Saving the trained Random Forest model...")
-joblib.dump(clf, 'traffic_classifier_model.pkl')
-print("Model saved as 'traffic_classifier_model.pkl'.")
+joblib.dump(clf, 'arp_spoofing_model.pkl')
+print("Model trained and saved as 'arp_spoofing_model.pkl'.")
 
-# Save the Label Encoders
-print("Saving label encoders for future use...")
-joblib.dump(le_protocol, 'le_protocol.pkl')
-joblib.dump(le_source, 'le_source.pkl')
-joblib.dump(le_destination, 'le_destination.pkl')
-print("Label encoders saved.")
+# Evaluate the model
+y_pred = clf.predict(X_test)
 
-# Optionally, save the cleaned and labeled dataset for future use
-print("Saving the cleaned and labeled dataset to 'labeled_traffic_data.csv'...")
-df_cleaned.to_csv('labeled_traffic_data.csv', index=False)
-print("Cleaned data saved as 'labeled_traffic_data.csv'.")
+from sklearn.metrics import accuracy_score, classification_report
+print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
+print('Classification Report:')
+print(classification_report(y_test, y_pred))
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, roc_curve, auc
+import numpy as np
+import pandas as pd
+import joblib
 
+# Load the model and dataset
+clf = joblib.load('arp_spoofing_model.pkl')
+df = pd.read_csv('dataset.csv')
+
+# Filter out only ARP packets
+df_arp = df[df['Protocol'] == 'ARP']
+
+# Extract features and prepare the data as in your original code
+ip_mac_map = defaultdict(set)
+feature_list = []
+for index, row in df_arp.iterrows():
+    ip_address = row['Info'].split(' ')[0]  # '192.168.1.1'
+    mac_address = row['Source']  # MAC address of the source device
+    ip_mac_map[ip_address].add(mac_address)
+    # Feature extraction
+    num_mac_addresses = len(ip_mac_map[ip_address])
+    feature_list.append([row['Time'], row['Length'], num_mac_addresses])
+
+# Convert features to a DataFrame
+features_df = pd.DataFrame(feature_list, columns=['Time', 'Length', 'Num_MAC_Addresses'])
+df_arp = pd.concat([df_arp, features_df], axis=1)
+
+# Prepare the feature matrix X and target variable y
+X = df_arp[['Time', 'Length', 'Num_MAC_Addresses']]  # Features
+y = df_arp['bad_packet']  # Target (assuming 'bad_packet' column exists as in the original code)
+
+# Model prediction
+y_pred = clf.predict(X)
+
+# 1. **Distribution of 'Time' (ARP packet time distribution)**
+plt.figure(figsize=(10, 6))
+sns.histplot(df_arp['Time'], kde=True, bins=30, color='blue')
+plt.title('Distribution of Time (ARP Packets)')
+plt.xlabel('Time')
+plt.ylabel('Frequency')
+plt.show()
+
+# 2. **Distribution of 'Length' (Packet length distribution)**
+plt.figure(figsize=(10, 6))
+sns.histplot(df_arp['Length'], kde=True, bins=30, color='green')
+plt.title('Distribution of Packet Length (ARP)')
+plt.xlabel('Length')
+plt.ylabel('Frequency')
+plt.show()
+
+# 3. **Distribution of 'Num_MAC_Addresses' (Number of MAC addresses per IP)**
+plt.figure(figsize=(10, 6))
+sns.histplot(df_arp['Num_MAC_Addresses'], kde=True, bins=30, color='red')
+plt.title('Distribution of Number of MAC Addresses per IP')
+plt.xlabel('Number of MAC Addresses')
+plt.ylabel('Frequency')
+plt.show()
+
+# **Model Evaluation Graphs**
+
+# 4. **Confusion Matrix**
+cm = confusion_matrix(y, y_pred)
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Spoofing'], yticklabels=['Normal', 'Spoofing'])
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.show()
 
