@@ -1,134 +1,142 @@
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-import joblib
-from collections import defaultdict  # Import defaultdict
-import seaborn as sns
 import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+import joblib
+import warnings
+
+warnings.filterwarnings("ignore")
+
 # Load the dataset
-df = pd.read_csv('training_data.csv')
+df = pd.read_csv('labeled_training_data.csv')
 
-# Check column names to ensure 'Info' exists
-# print("Columns in dataset:", df.columns)
+# Step 1: Understand the Dataset
+print("Dataset Shape:", df.shape)
+print("Columns in Dataset:", df.columns)
+print("Data Types in Dataset:", df.dtypes)
+print("First few rows of the dataset:")
+print(df.head())
+print("\nSummary Statistics (Numerical Features):")
+print(df.describe())
+print("\nMissing Values in the Dataset:")
+print(df.isnull().sum())
 
-# Filter out only ARP packets
-df_arp = df[df['Protocol'] == 'ARP']
+if 'bad_packet' in df.columns:
+    print("\nClass Distribution of 'bad_packet':")
+    print(df['bad_packet'].value_counts())
 
-# Initialize a new column 'bad_packet' with 0 (normal)
-df_arp.loc[:, 'bad_packet'] = 0
+print("\nNumber of Duplicate Rows:", df.duplicated().sum())
 
-# Extract features (Timestamp, Packet Length, Number of MAC addresses per IP)
-ip_mac_map = defaultdict(set)
-feature_list = []
+# Step 2: Exploratory Data Analysis (EDA)
+numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+correlation_matrix = df[numeric_cols].corr()
+print("\nCorrelation Matrix:")
+print(correlation_matrix)
 
-for index, row in df_arp.iterrows():
-    ip_address = row['Info'].split(' ')[0]  # '192.168.1.1'
-    mac_address = row['Source']  # MAC address of the source device
-    ip_mac_map[ip_address].add(mac_address)
-    
-    # Feature extraction
-    num_mac_addresses = len(ip_mac_map[ip_address])
-    feature_list.append([row['Time'], row['Length'], num_mac_addresses])
-
-# Convert features to a DataFrame
-features_df = pd.DataFrame(feature_list, columns=['Time', 'Length', 'Num_MAC_Addresses'])
-df_arp = pd.concat([df_arp, features_df], axis=1)
-
-# Drop rows with NaN values in 'bad_packet' (target variable)
-df_arp = df_arp.dropna(subset=['bad_packet'])
-
-# Prepare the feature matrix X and target variable y
-X_train = df_arp[['Time', 'Length', 'Num_MAC_Addresses']]  # Features
-y_train = df_arp['bad_packet']  # Target
-
-# Train-test split
-X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
-
-# Initialize RandomForest model
-clf = RandomForestClassifier(n_estimators=100, random_state=42)
-
-# Fit the model
-clf.fit(X_train, y_train)
-
-# Save the trained model
-joblib.dump(clf, 'arp_spoofing_model.pkl')
-print("Model trained and saved as 'arp_spoofing_model.pkl'.")
-
-# Evaluate the model
-y_pred = clf.predict(X_test)
-
-from sklearn.metrics import accuracy_score, classification_report
-print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-print('Classification Report:')
-print(classification_report(y_test, y_pred))
-import seaborn as sns
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, roc_curve, auc
-import numpy as np
-import pandas as pd
-import joblib
-
-# Load the model and dataset
-clf = joblib.load('arp_spoofing_model.pkl')
-df = pd.read_csv('dataset.csv')
-
-# Filter out only ARP packets
-df_arp = df[df['Protocol'] == 'ARP']
-
-# Extract features and prepare the data as in your original code
-ip_mac_map = defaultdict(set)
-feature_list = []
-for index, row in df_arp.iterrows():
-    ip_address = row['Info'].split(' ')[0]  # '192.168.1.1'
-    mac_address = row['Source']  # MAC address of the source device
-    ip_mac_map[ip_address].add(mac_address)
-    # Feature extraction
-    num_mac_addresses = len(ip_mac_map[ip_address])
-    feature_list.append([row['Time'], row['Length'], num_mac_addresses])
-
-# Convert features to a DataFrame
-features_df = pd.DataFrame(feature_list, columns=['Time', 'Length', 'Num_MAC_Addresses'])
-df_arp = pd.concat([df_arp, features_df], axis=1)
-
-# Prepare the feature matrix X and target variable y
-X = df_arp[['Time', 'Length', 'Num_MAC_Addresses']]  # Features
-y = df_arp['bad_packet']  # Target (assuming 'bad_packet' column exists as in the original code)
-
-# Model prediction
-y_pred = clf.predict(X)
-
-# 1. **Distribution of 'Time' (ARP packet time distribution)**
 plt.figure(figsize=(10, 6))
-sns.histplot(df_arp['Time'], kde=True, bins=30, color='blue')
-plt.title('Distribution of Time (ARP Packets)')
-plt.xlabel('Time')
-plt.ylabel('Frequency')
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
+plt.title('Correlation Matrix')
 plt.show()
 
-# 2. **Distribution of 'Length' (Packet length distribution)**
-plt.figure(figsize=(10, 6))
-sns.histplot(df_arp['Length'], kde=True, bins=30, color='green')
-plt.title('Distribution of Packet Length (ARP)')
+plt.figure(figsize=(8, 6))
+sns.histplot(df['Length'], kde=True, color='blue', bins=30)
+plt.title('Distribution of Packet Length')
 plt.xlabel('Length')
 plt.ylabel('Frequency')
 plt.show()
 
-# 3. **Distribution of 'Num_MAC_Addresses' (Number of MAC addresses per IP)**
-plt.figure(figsize=(10, 6))
-sns.histplot(df_arp['Num_MAC_Addresses'], kde=True, bins=30, color='red')
-plt.title('Distribution of Number of MAC Addresses per IP')
-plt.xlabel('Number of MAC Addresses')
+plt.figure(figsize=(8, 6))
+sns.histplot(df['Time'], kde=True, color='green', bins=30)
+plt.title('Distribution of Time')
+plt.xlabel('Time')
 plt.ylabel('Frequency')
 plt.show()
 
-# **Model Evaluation Graphs**
-
-# 4. **Confusion Matrix**
-cm = confusion_matrix(y, y_pred)
 plt.figure(figsize=(8, 6))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Spoofing'], yticklabels=['Normal', 'Spoofing'])
+sns.countplot(x='bad_packet', data=df, palette='Set2')
+plt.title('Class Distribution of bad_packet')
+plt.xlabel('bad_packet')
+plt.ylabel('Count')
+plt.show()
+
+plt.figure(figsize=(8, 6))
+sns.boxplot(x=df['Length'], color='orange')
+plt.title('Boxplot for Packet Length')
+plt.xlabel('Length')
+plt.show()
+
+# Step 3: Feature Engineering
+le_protocol = LabelEncoder()
+df['Protocol'] = le_protocol.fit_transform(df['Protocol'])
+
+if 'Destination' in df.columns:
+    df = pd.get_dummies(df, columns=['Source', 'Destination'], drop_first=True)
+else:
+    print("'Destination' column does not exist. Please check the dataset.")
+
+df['packet_interval'] = df['Time'].diff().fillna(0)
+df['is_arp_request'] = df['Info'].apply(lambda x: 1 if 'Who has' in str(x) else 0)
+
+if 'Destination_Broadcast' in df.columns:
+    df['is_broadcast'] = df['Destination_Broadcast']
+else:
+    if 'Destination' in df.columns:
+        df['is_broadcast'] = df['Destination'].apply(lambda x: 1 if x == 'Broadcast' else 0)
+    else:
+        print("'Destination' column not found, unable to create 'is_broadcast'.")
+
+numerical_features = ['Time', 'Length', 'packet_interval']
+scaler = StandardScaler()
+df[numerical_features] = scaler.fit_transform(df[numerical_features])
+
+# Step 4: Prepare the Data for Modeling
+X = df.drop(columns=['bad_packet', 'Info', 'No.'])
+y = df['bad_packet']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+print(f"Training data shape: {X_train.shape}, Test data shape: {X_test.shape}")
+
+# Step 5: Initialize and Train Logistic Regression
+lr_model = LogisticRegression(class_weight='balanced', random_state=42)
+
+param_grid = {
+    'C': [0.1, 1, 10],
+    'penalty': ['l2'],
+    'solver': ['liblinear']
+}
+
+grid_search = GridSearchCV(lr_model, param_grid, cv=5, n_jobs=-1, scoring='accuracy', verbose=1)
+grid_search.fit(X_train, y_train)
+
+# Print best parameters
+print(f"Best parameters found: {grid_search.best_params_}")
+
+# Step 6: Model Evaluation
+y_pred = grid_search.best_estimator_.predict(X_test)
+
+# Perform cross-validation
+cv_scores = cross_val_score(grid_search.best_estimator_, X_train, y_train, cv=5)
+print(f"Cross-validation accuracy: {cv_scores.mean()} ± {cv_scores.std()}")
+
+# Evaluate accuracy and print classification report
+print(f"Test Accuracy: {accuracy_score(y_test, y_pred)}")
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+
+# Confusion Matrix
+conf_matrix = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(8, 6))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=['Normal', 'Malicious'], yticklabels=['Normal', 'Malicious'])
 plt.title('Confusion Matrix')
 plt.xlabel('Predicted')
 plt.ylabel('Actual')
 plt.show()
 
+# Step 7: Save the model
+joblib.dump(grid_search.best_estimator_, 'logistic_regression_model.pkl')
+
+print("Model saved as 'logistic_regression_model.pkl'")
