@@ -3,26 +3,26 @@ import warnings
 
 warnings.filterwarnings("ignore")
 # Load the dataset
-df = pd.read_csv('training_data.csv')
+df = pd.read_csv('unlabeled_training_data.csv')
 
 # Check column names to ensure 'Info' exists
 print("Columns in dataset:", df.columns)
 
 # Filter out only ARP packets
-df_arp = df[df['Protocol'] == 'ARP']
+
 
 # Check if 'Info' column exists
-if 'Info' in df_arp.columns:
+if 'Info' in df.columns:
     # Create a dictionary to store IP-MAC mappings
     ip_mac_map = {}
 
     # Initialize a new column 'bad_packet' with 0 (normal)
-    df_arp = df_arp.copy()  # Avoid SettingWithCopyWarning
+    df = df.copy()  # Avoid SettingWithCopyWarning
 
-    df_arp['bad_packet'] = 0  # Default label as normal
+    df['bad_packet'] = 0  # Default label as normal
 
     # Iterate over the ARP packets to detect ARP spoofing
-    for index, row in df_arp.iterrows():
+    for index, row in df.iterrows():
         # Extract source and destination IPs and MAC addresses from the 'Info' column
         ip_address = row['Info'].split(' ')[0]  # Assuming the first word in 'Info' is the IP address
         mac_address = row['Source']  # MAC address of the source device
@@ -35,12 +35,12 @@ if 'Info' in df_arp.columns:
         
         # If the same IP is associated with more than one MAC address, flag the packet as malicious
         if len(ip_mac_map[ip_address]) > 1:
-            df_arp.at[index, 'bad_packet'] = 1  # Mark this packet as malicious
+            df.at[index, 'bad_packet'] = 1  # Mark this packet as malicious
 
     # Show a few samples of the labeled data
-    print(df_arp[['Time', 'Source', 'Destination', 'Protocol', 'Length', 'Info', 'bad_packet']].head())
+    print(df[['Time', 'Source', 'Destination', 'Protocol', 'Length', 'Info', 'bad_packet']].head())
 
     # Save the labeled data for further analysis or training
-    df_arp.to_csv('labeled_training_data.csv', index=False)
+    df.to_csv('labeled_training_data.csv', index=False)
 else:
     print("Error: 'Info' column not found in the dataset. Please check the dataset structure.")

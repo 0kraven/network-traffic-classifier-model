@@ -42,32 +42,23 @@ sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm')
 plt.title('Correlation Matrix')
 plt.show()
 
-plt.figure(figsize=(8, 6))
-sns.histplot(df['Length'], kde=True, color='blue', bins=30)
-plt.title('Distribution of Packet Length')
-plt.xlabel('Length')
-plt.ylabel('Frequency')
+
+plt.figure(figsize=(10, 6))
+sns.lineplot(data=df['Time'], color='green')
+plt.title('Trend of Packet Time Intervals')
+plt.xlabel('Packet Index')
+plt.ylabel('Time Interval')
 plt.show()
 
-plt.figure(figsize=(8, 6))
-sns.histplot(df['Time'], kde=True, color='green', bins=30)
-plt.title('Distribution of Time')
-plt.xlabel('Time')
-plt.ylabel('Frequency')
-plt.show()
 
-plt.figure(figsize=(8, 6))
+# Class distribution (bad_packet)
+plt.figure(figsize=(10, 6))
 sns.countplot(x='bad_packet', data=df, palette='Set2')
 plt.title('Class Distribution of bad_packet')
-plt.xlabel('bad_packet')
+plt.xlabel('Class (0 = Normal, 1 = Malicious)')
 plt.ylabel('Count')
 plt.show()
 
-plt.figure(figsize=(8, 6))
-sns.boxplot(x=df['Length'], color='orange')
-plt.title('Boxplot for Packet Length')
-plt.xlabel('Length')
-plt.show()
 
 # Step 3: Feature Engineering
 le_protocol = LabelEncoder()
@@ -93,7 +84,7 @@ numerical_features = ['Time', 'Length', 'packet_interval']
 scaler = StandardScaler()
 df[numerical_features] = scaler.fit_transform(df[numerical_features])
 
-# Step 4: Prepare the Data for Modeling
+#Step 4: Prepare the Data for Modeling
 X = df.drop(columns=['bad_packet', 'Info', 'No.'])
 y = df['bad_packet']
 
